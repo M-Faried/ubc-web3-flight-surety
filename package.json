@@ -5,7 +5,7 @@
   "directories": {
     "test": "test"
   },
-  "repository": "https://github.com/techbubble/flightsurety",
+  "repository": "https://github.com/M-Faried/ubc-web3-flight-surety",
   "license": "MIT",
   "scripts": {
     "test": "truffle test ./test/flightSurety.js",
@@ -13,7 +13,7 @@
     "dapp:prod": "webpack --mode production  --config webpack.config.dapp.js",
     "server": "rm -rf ./build/server && webpack --config webpack.config.server.js"
   },
-  "author": "Nik Kalyani <nik@kalyani.com> https://www.kalyani.com",
+  "author": "Mohamed Faried <m.a.faried@gmail.com> https://m-faried.github.io/m-faried-portfolio/",
   "devDependencies": {
     "@babel/core": "^7.18.5",
     "@babel/plugin-proposal-class-properties": "^7.17.12",
@@ -30,7 +30,7 @@
     "file-loader": "^6.2.0",
     "html-loader": "^3.1.2",
     "html-webpack-plugin": "^5.5.0",
-    "openzeppelin-solidity": "^4.6.0",
+    "openzeppelin-solidity": "^1.10.0",
     "start-server-webpack-plugin": "^2.2.5",
     "style-loader": "^3.3.1",
     "superstatic": "^8.0.0",
