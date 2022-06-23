@@ -6,9 +6,10 @@ var web3 = require('web3');
 contract('Flight Surety Tests', async (accounts) => {
 
     var config;
+
     before('setup contract', async () => {
         config = await Test.Config(accounts);
-        // await config.flightSuretyData.authorizeCaller(config.flightSuretyApp.address);
+        await config.flightSuretyData.authorizeCaller(config.flightSuretyApp.address);
     });
 
     /****************************************************************************************/
@@ -81,12 +82,25 @@ contract('Flight Surety Tests', async (accounts) => {
         catch (e) {
 
         }
-        let result = await config.flightSuretyData.isAirline.call(newAirline);
+
+        let result = await config.flightSuretyData.isAirline(newAirline);
 
         // ASSERT
         assert.equal(result, false, "Airline should not be able to register another airline if it hasn't provided funding");
 
     });
+
+    it('Cannot add an airline directly from EVEN by the owner', async () => {
+        let newAirline = accounts[2];
+        try {
+            await config.flightSuretyData.addAirline(newAirline, { from: config.owner });
+        }
+        catch (e) {
+            // console.log(e.message);
+        }
+        let airlineAdded = await config.flightSuretyData.isAirline(newAirline);
+        assert.equal(airlineAdded, false, "Airline shouldn't be")
+    })
 
 
 });
