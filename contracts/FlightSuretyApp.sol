@@ -23,8 +23,8 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
-
-    address private contractOwner; // Account used to deploy contract
+    uint8 private constant MIN_AIRLINES_BEFORE_CONSENSYS = 4;
+    uint256 private constant REQUIRED_REGISTRATION_FEE = 10 ether;
 
     struct Flight {
         bool isRegistered;
@@ -32,7 +32,21 @@ contract FlightSuretyApp {
         uint256 updatedTimestamp;
         address airline;
     }
+
+    struct RegisterationApproval {
+        address[] approvals;
+        bool paidFees;
+    }
+
+    address private contractOwner; // Account used to deploy contract
     mapping(bytes32 => Flight) private flights;
+    mapping(address => RegisterationApproval) private _pendingApprovals; // Holding all the airlines in the approval process
+    IFlightSuretyData private _dataContract;
+
+    /********************************************************************************************/
+    /*                                       Events                                             */
+    /********************************************************************************************/
+    event AirlineRegistred(address airline);
 
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -48,7 +62,10 @@ contract FlightSuretyApp {
      */
     modifier requireIsOperational() {
         // Modify to call data contract's status
-        require(true, "Contract is currently not operational");
+        require(
+            _dataContract.isOperational(),
+            "Contract is currently not operational"
+        );
         _; // All modifiers require an "_" which indicates where the function body will be added
     }
 
@@ -60,6 +77,14 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier requireNonRegistredAirline(address airline) {
+        require(
+            !_dataContract.isAirline(airline),
+            "The airline is already registered"
+        );
+        _;
+    }
+
     /********************************************************************************************/
     /*                                       CONSTRUCTOR                                        */
     /********************************************************************************************/
@@ -68,16 +93,14 @@ contract FlightSuretyApp {
      * @dev Contract constructor
      *
      */
-    constructor() public {
+    constructor(address dataContractAddress) public {
+        require(msg.sender != address(0), "The sender can't be left empty");
+        require(
+            dataContractAddress != address(0),
+            "The data contract address can't be left empty"
+        );
         contractOwner = msg.sender;
-    }
-
-    /********************************************************************************************/
-    /*                                       UTILITY FUNCTIONS                                  */
-    /********************************************************************************************/
-
-    function isOperational() public pure returns (bool) {
-        return true; // Modify to call data contract's status
+        _dataContract = IFlightSuretyData(dataContractAddress);
     }
 
     /********************************************************************************************/
@@ -86,14 +109,104 @@ contract FlightSuretyApp {
 
     /**
      * @dev Add an airline to the registration queue
+     *      Can only be called from FlightSuretyApp contract
      *
      */
-    function registerAirline()
+    function registerAirline(address newAirline)
         external
-        pure
-        returns (bool success, uint256 votes)
+        requireIsOperational
+        requireNonRegistredAirline(newAirline)
     {
-        return (success, 0);
+        if (_dataContract.getAirlinesCount() < MIN_AIRLINES_BEFORE_CONSENSYS) {
+            // Checking the sender is an already existing airline.
+            require(
+                _dataContract.isAirline(msg.sender),
+                "The sender is not a registred air line"
+            );
+
+            // Pushing the message sender to the list of approvals.
+            // Skipping the check for unique approvals since all we need in this case is one approval.
+            _pendingApprovals[newAirline].approvals.push(msg.sender);
+
+            // Checking the airline has paid the fees.
+            _checkRegistrationApprovalState(newAirline);
+        } else {
+            // Retrieving the set of approvals for the airline to be registred.
+            address[] storage approvals = _pendingApprovals[newAirline]
+                .approvals;
+
+            // Checking if the message sender has already approved the airline.
+            bool existingApproval = false;
+            for (uint256 i; i < approvals.length; i++)
+                if (approvals[i] == msg.sender) {
+                    existingApproval = true;
+                    break;
+                }
+
+            require(
+                existingApproval,
+                "The sender has already approved for this airline"
+            );
+
+            // Adding the approval to the list of approvals
+            approvals.push(msg.sender);
+
+            // Checking if the airline is ready to be registred.
+            _checkRegistrationApprovalState(newAirline);
+        }
+    }
+
+    /**
+     * @dev Allows the airline to pay the fees of its own registration.
+     * Only the airline is allowed to pay the registration fees for its own.
+     */
+    function payRegistrationFee()
+        external
+        payable
+        requireIsOperational
+        requireNonRegistredAirline(msg.sender)
+    {
+        // Making sure the value paid equals to the requried fees.
+        require(
+            msg.value == REQUIRED_REGISTRATION_FEE,
+            "The sent value doesn't equal the required registration fee"
+        );
+
+        // Adding the current sender in the pending approvals list with paidFees to be true.
+        _pendingApprovals[msg.sender].paidFees = true;
+
+        // Transfering funds to the owner.
+        contractOwner.transfer(msg.value);
+
+        // Checking if the approvals state is complete and the airline is ready to be registred or not.
+        _checkRegistrationApprovalState(msg.sender);
+    }
+
+    /**
+     * @dev Checks if the airline is ready to be registred, and registres it if so.
+     */
+    function _checkRegistrationApprovalState(address pendingAirline) private {
+        if (
+            _dataContract.getAirlinesCount() < MIN_AIRLINES_BEFORE_CONSENSYS &&
+            _pendingApprovals[pendingAirline].paidFees &&
+            _pendingApprovals[pendingAirline].approvals.length > 0 // All we need is one approval in this case.
+        ) {
+            _dataContract.addAirline(pendingAirline);
+            delete _pendingApprovals[pendingAirline];
+            emit AirlineRegistred(pendingAirline);
+        }
+        // Checking the approval number has reached the threshold and adding the airline accordingly.
+        else if (
+            _dataContract.getAirlinesCount() >= MIN_AIRLINES_BEFORE_CONSENSYS &&
+            _pendingApprovals[pendingAirline].paidFees &&
+            _pendingApprovals[pendingAirline].approvals.length >=
+            (_dataContract.getAirlinesCount() / 2)
+        ) {
+            // Adding the airline to registred airlines lis
+            _dataContract.addAirline(pendingAirline);
+            delete _pendingApprovals[pendingAirline];
+            emit AirlineRegistred(pendingAirline);
+        }
     }
 
     /**
@@ -297,4 +410,14 @@ contract FlightSuretyApp {
     }
 
     // endregion
+}
+
+contract IFlightSuretyData {
+    function isOperational() public view returns (bool) {}
+
+    function isAirline(address checkedAirline) external view returns (bool) {}
+
+    function getAirlinesCount() external view returns (uint256) {}
+
+    function addAirline(address newAirline) external {}
 }
