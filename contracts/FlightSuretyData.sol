@@ -20,11 +20,11 @@ contract FlightSuretyData {
         bool paidFees;
     }
 
-    address private contractOwner; // Account used to deploy contract
-    bool private operational = true; // Blocks all state changes throughout the contract if false
-    mapping(address => Airline) private airlines; // Holding the registred successfully mapping.
-    mapping(address => RegisterationApproval) pendingApprovals; // Holding all the airlines in the approval process
-    uint256 private airlinesLength = 0; // Holds the length of pending approvals mapping.
+    address private _contractOwner; // Account used to deploy contract
+    bool private _operational = true; // Blocks all state changes throughout the contract if false
+    mapping(address => Airline) private _airlines; // Holding the registred successfully mapping.
+    mapping(address => RegisterationApproval) _pendingApprovals; // Holding all the airlines in the approval process
+    uint256 private _airlinesLength = 0; // Holds the length of pending approvals mapping.
 
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
@@ -37,10 +37,15 @@ contract FlightSuretyData {
      *      The deploying account becomes contractOwner
      */
     constructor(address firstAirline) public {
-        contractOwner = msg.sender;
+        require(msg.sender != address(0), "The contract must have an owner");
+        require(
+            firstAirline != address(0),
+            "The first airline can be left empty"
+        );
+        _contractOwner = msg.sender;
         // Adding the first airline to the list to be able to add other airlines.
-        airlines[firstAirline] = Airline({registred: true});
-        airlinesLength++;
+        _airlines[firstAirline] = Airline({registred: true});
+        _airlinesLength++;
     }
 
     /********************************************************************************************/
@@ -56,7 +61,7 @@ contract FlightSuretyData {
      *      the event there is an issue that needs to be fixed
      */
     modifier requireIsOperational() {
-        require(operational, "Contract is currently not operational");
+        require(_operational, "Contract is currently not operational");
         _; // All modifiers require an "_" which indicates where the function body will be added
     }
 
@@ -64,7 +69,7 @@ contract FlightSuretyData {
      * @dev Modifier that requires the "ContractOwner" account to be the function caller
      */
     modifier requireContractOwner() {
-        require(msg.sender == contractOwner, "Caller is not contract owner");
+        require(msg.sender == _contractOwner, "Caller is not contract owner");
         _;
     }
 
@@ -73,7 +78,7 @@ contract FlightSuretyData {
      */
     modifier requiresNonRegistredAirline(address airline) {
         require(
-            !airlines[airline].registred,
+            !_airlines[airline].registred,
             "The airline is already registred."
         );
         _;
@@ -89,7 +94,7 @@ contract FlightSuretyData {
      * @return A bool that is the current operating status
      */
     function isOperational() public view returns (bool) {
-        return operational;
+        return _operational;
     }
 
     /**
@@ -98,8 +103,8 @@ contract FlightSuretyData {
      * When operational mode is disabled, all write transactions except for this one will fail
      */
     function setOperatingStatus(bool mode) external requireContractOwner {
-        require(mode != operational, "The value has to be different.");
-        operational = mode;
+        require(mode != _operational, "The value has to be different.");
+        _operational = mode;
     }
 
     /********************************************************************************************/
@@ -116,22 +121,22 @@ contract FlightSuretyData {
         requireIsOperational
         requiresNonRegistredAirline(newAirline)
     {
-        if (airlinesLength < MIN_AIRLINES_BEFORE_CONSENSYS) {
+        if (_airlinesLength < MIN_AIRLINES_BEFORE_CONSENSYS) {
             // Checking the sender is an already existing airline.
             require(
-                airlines[msg.sender].registred,
+                _airlines[msg.sender].registred,
                 "The sender is not a registred air line"
             );
 
             // Pushing the message sender to the list of approvals.
             // Skipping the check for unique approvals since all we need in this case is one approval.
-            pendingApprovals[newAirline].approvals.push(msg.sender);
+            _pendingApprovals[newAirline].approvals.push(msg.sender);
 
             // Checking the airline has paid the fees.
             _checkRegistrationApprovalState(newAirline);
         } else {
             // Retrieving the set of approvals for the airline to be registred.
-            address[] storage approvals = pendingApprovals[newAirline]
+            address[] storage approvals = _pendingApprovals[newAirline]
                 .approvals;
 
             // Checking if the message sender has already approved the airline.
@@ -162,6 +167,7 @@ contract FlightSuretyData {
     function payRegistrationFee()
         external
         payable
+        requireIsOperational
         requiresNonRegistredAirline(msg.sender)
     {
         // Making sure the value paid equals to the requried fees.
@@ -171,13 +177,17 @@ contract FlightSuretyData {
         );
 
         // Adding the current sender in the pending approvals list with paidFees to be true.
-        pendingApprovals[msg.sender].paidFees = true;
+        _pendingApprovals[msg.sender].paidFees = true;
 
         // Transfering funds to the owner.
-        contractOwner.transfer(msg.value);
+        _contractOwner.transfer(msg.value);
 
         // Checking if the approvals state is complete and the airline is ready to be registred or not.
         _checkRegistrationApprovalState(msg.sender);
+    }
+
+    function isAirline(address checkedAirline) external view returns (bool) {
+        return _airlines[checkedAirline].registred;
     }
 
     /**
@@ -217,27 +227,27 @@ contract FlightSuretyData {
      */
     function _checkRegistrationApprovalState(address pendingAirline) private {
         if (
-            airlinesLength < MIN_AIRLINES_BEFORE_CONSENSYS &&
-            pendingApprovals[pendingAirline].paidFees &&
-            pendingApprovals[pendingAirline].approvals.length > 0 // All we need is one approval in this case.
+            _airlinesLength < MIN_AIRLINES_BEFORE_CONSENSYS &&
+            _pendingApprovals[pendingAirline].paidFees &&
+            _pendingApprovals[pendingAirline].approvals.length > 0 // All we need is one approval in this case.
         ) {
             // Adding the airline to registred airlines lis
-            airlines[pendingAirline] = Airline({registred: true});
-            airlinesLength++;
-            delete pendingApprovals[pendingAirline];
+            _airlines[pendingAirline] = Airline({registred: true});
+            _airlinesLength++;
+            delete _pendingApprovals[pendingAirline];
             emit AirlineRegistred(pendingAirline);
         }
         // Checking the approval number has reached the threshold and adding the airline accordingly.
         else if (
-            airlinesLength >= MIN_AIRLINES_BEFORE_CONSENSYS &&
-            pendingApprovals[pendingAirline].paidFees &&
-            pendingApprovals[pendingAirline].approvals.length >=
-            (airlinesLength / 2)
+            _airlinesLength >= MIN_AIRLINES_BEFORE_CONSENSYS &&
+            _pendingApprovals[pendingAirline].paidFees &&
+            _pendingApprovals[pendingAirline].approvals.length >=
+            (_airlinesLength / 2)
         ) {
             // Adding the airline to registred airlines lis
-            airlines[pendingAirline] = Airline({registred: true});
-            airlinesLength++;
-            delete pendingApprovals[pendingAirline];
+            _airlines[pendingAirline] = Airline({registred: true});
+            _airlinesLength++;
+            delete _pendingApprovals[pendingAirline];
             emit AirlineRegistred(pendingAirline);
         }
     }
