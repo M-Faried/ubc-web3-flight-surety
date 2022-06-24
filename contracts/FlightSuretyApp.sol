@@ -121,7 +121,7 @@ contract FlightSuretyApp {
             // Checking the sender is an already existing airline.
             require(
                 _dataContract.isAirline(msg.sender),
-                "The sender is not a registred air line"
+                "The sender is not a registred airline"
             );
 
             // Pushing the message sender to the list of approvals.
@@ -131,25 +131,25 @@ contract FlightSuretyApp {
             // Checking the airline has paid the fees.
             _checkRegistrationApprovalState(newAirline);
         } else {
-            // Retrieving the set of approvals for the airline to be registred.
-            address[] storage approvals = _pendingApprovals[newAirline]
-                .approvals;
-
             // Checking if the message sender has already approved the airline.
             bool existingApproval = false;
-            for (uint256 i; i < approvals.length; i++)
-                if (approvals[i] == msg.sender) {
+            for (
+                uint256 i;
+                i < _pendingApprovals[newAirline].approvals.length;
+                i++
+            )
+                if (_pendingApprovals[newAirline].approvals[i] == msg.sender) {
                     existingApproval = true;
                     break;
                 }
 
             require(
-                existingApproval,
+                !existingApproval,
                 "The sender has already approved for this airline"
             );
 
             // Adding the approval to the list of approvals
-            approvals.push(msg.sender);
+            _pendingApprovals[newAirline].approvals.push(msg.sender);
 
             // Checking if the airline is ready to be registred.
             _checkRegistrationApprovalState(newAirline);
@@ -172,6 +172,11 @@ contract FlightSuretyApp {
             "The sent value doesn't equal the required registration fee"
         );
 
+        require(
+            !_pendingApprovals[msg.sender].paidFees,
+            "The fees has already been paid"
+        );
+
         // Adding the current sender in the pending approvals list with paidFees to be true.
         _pendingApprovals[msg.sender].paidFees = true;
 
@@ -186,8 +191,9 @@ contract FlightSuretyApp {
      * @dev Checks if the airline is ready to be registred, and registres it if so.
      */
     function _checkRegistrationApprovalState(address pendingAirline) private {
+        uint256 airlinesCount = _dataContract.getAirlinesCount();
         if (
-            _dataContract.getAirlinesCount() < MIN_AIRLINES_BEFORE_CONSENSYS &&
+            airlinesCount < MIN_AIRLINES_BEFORE_CONSENSYS &&
             _pendingApprovals[pendingAirline].paidFees &&
             _pendingApprovals[pendingAirline].approvals.length > 0 // All we need is one approval in this case.
         ) {
@@ -197,10 +203,10 @@ contract FlightSuretyApp {
         }
         // Checking the approval number has reached the threshold and adding the airline accordingly.
         else if (
-            _dataContract.getAirlinesCount() >= MIN_AIRLINES_BEFORE_CONSENSYS &&
+            airlinesCount >= MIN_AIRLINES_BEFORE_CONSENSYS &&
             _pendingApprovals[pendingAirline].paidFees &&
             _pendingApprovals[pendingAirline].approvals.length >=
-            (_dataContract.getAirlinesCount() / 2)
+            (airlinesCount / 2)
         ) {
             // Adding the airline to registred airlines lis
             _dataContract.addAirline(pendingAirline);
