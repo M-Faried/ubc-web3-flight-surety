@@ -23,14 +23,17 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_WEATHER = 30;
     uint8 private constant STATUS_CODE_LATE_TECHNICAL = 40;
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
+
     uint8 private constant MIN_AIRLINES_BEFORE_CONSENSYS = 4;
     uint256 private constant REQUIRED_REGISTRATION_FEE = 10 ether;
+    uint256 private constant INSURANCE_FEES_MAX = 1 ether;
 
     struct Flight {
         bool isRegistered;
         uint8 statusCode;
         uint256 updatedTimestamp;
         address airline;
+        string flight;
     }
 
     struct RegisterationApproval {
@@ -38,10 +41,22 @@ contract FlightSuretyApp {
         bool paidFees;
     }
 
-    address private contractOwner; // Account used to deploy contract
-    mapping(bytes32 => Flight) private flights;
-    mapping(address => RegisterationApproval) private _pendingApprovals; // Holding all the airlines in the approval process
-    IFlightSuretyData private _dataContract;
+    struct Insurance {
+        address owner;
+        uint256 paidAmmount;
+        bool exist;
+    }
+
+    address private _contractOwner; // Account used to deploy contract
+
+    bytes32[] private _flightKeys; // Holds all flight keys and used for looping through all the flights.
+    mapping(bytes32 => Flight) private _flights; // Holds all the registred flights created by the airline.
+    mapping(bytes32 => Insurance[]) private _flightInsurees; // Holds the data of those who bought insurance that belongs to a certain flight key.
+    mapping(address => Insurance) _insuranceOwners; // Holds all the insurances bought with owners as keys.
+
+    mapping(address => RegisterationApproval) private _pendingApprovals; // Holding all the airlines in the approval process.
+    IFlightSuretyData private _dataContract; // The data contract.
+    uint256 private _balance = 0; // Holds the current balance of the contract.
 
     /********************************************************************************************/
     /*                                       Events                                             */
@@ -73,7 +88,7 @@ contract FlightSuretyApp {
      * @dev Modifier that requires the "ContractOwner" account to be the function caller
      */
     modifier requireContractOwner() {
-        require(msg.sender == contractOwner, "Caller is not contract owner");
+        require(msg.sender == _contractOwner, "Caller is not contract owner");
         _;
     }
 
@@ -81,6 +96,14 @@ contract FlightSuretyApp {
         require(
             !_dataContract.isAirline(airline),
             "The airline is already registered"
+        );
+        _;
+    }
+
+    modifier requireRegistredAirline() {
+        require(
+            _dataContract.isAirline(msg.sender),
+            "The airline is not registred"
         );
         _;
     }
@@ -99,7 +122,7 @@ contract FlightSuretyApp {
             dataContractAddress != address(0),
             "The data contract address can't be left empty"
         );
-        contractOwner = msg.sender;
+        _contractOwner = msg.sender;
         _dataContract = IFlightSuretyData(dataContractAddress);
     }
 
@@ -115,15 +138,10 @@ contract FlightSuretyApp {
     function registerAirline(address newAirline)
         external
         requireIsOperational
+        requireRegistredAirline
         requireNonRegistredAirline(newAirline)
     {
         if (_dataContract.getAirlinesCount() < MIN_AIRLINES_BEFORE_CONSENSYS) {
-            // Checking the sender is an already existing airline.
-            require(
-                _dataContract.isAirline(msg.sender),
-                "The sender is not a registred airline"
-            );
-
             // Pushing the message sender to the list of approvals.
             // Skipping the check for unique approvals since all we need in this case is one approval.
             _pendingApprovals[newAirline].approvals.push(msg.sender);
@@ -180,8 +198,9 @@ contract FlightSuretyApp {
         // Adding the current sender in the pending approvals list with paidFees to be true.
         _pendingApprovals[msg.sender].paidFees = true;
 
-        // Transfering funds to the owner.
-        contractOwner.transfer(msg.value);
+        // Adding funds to the contract.
+        // _contractOwner.transfer(msg.value);
+        _balance = _balance.add(msg.value);
 
         // Checking if the approvals state is complete and the airline is ready to be registred or not.
         _checkRegistrationApprovalState(msg.sender);
@@ -219,7 +238,129 @@ contract FlightSuretyApp {
      * @dev Register a future flight for insuring.
      *
      */
-    function registerFlight() external pure {}
+    function registerFlight(string flight, uint256 timestamp)
+        external
+        requireRegistredAirline
+    {
+        bytes32 key = getFlightKey(msg.sender, flight, timestamp);
+
+        require(!_flights[key].isRegistered, "Flight already exist");
+
+        _flights[key] = Flight({
+            isRegistered: true,
+            airline: msg.sender,
+            flight: flight,
+            statusCode: STATUS_CODE_UNKNOWN,
+            updatedTimestamp: timestamp
+        });
+
+        _flightKeys.push(key);
+    }
+
+    /**
+     * @dev Buy insurance for a flight
+     *
+     */
+    function buy(
+        address airline,
+        string flight,
+        uint256 timestamp
+    ) external payable {
+        // Validating the paid ammount.
+        require(
+            msg.value > 0 && msg.value < INSURANCE_FEES_MAX,
+            "Invalid payment value"
+        );
+
+        // Checking the flight exists.
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        require(_flights[key].isRegistered, "Flight is not found");
+
+        // Creating the insurance instance.
+        Insurance memory boughtInsurance = Insurance({
+            owner: msg.sender,
+            paidAmmount: msg.value,
+            exist: true
+        });
+
+        // Adding the insurance instance to the proper lists.
+        _flightInsurees[key].push(boughtInsurance);
+        _insuranceOwners[msg.sender] = boughtInsurance;
+    }
+
+    /**
+     *  @dev Credits payouts to insurees
+     */
+    function creditInsurees() external {
+        uint8 status;
+        bytes32 key;
+
+        // Looping all over the flight keys. And checking the flight status.
+        // If the flight was delayed, increase the paid ammount of all who
+        // bought insurance by 1.5.
+        for (uint256 i = 0; i < _flightKeys.length; i++) {
+            key = _flightKeys[i];
+            status = _flights[key].statusCode;
+            // Checking the flight status.
+            if (
+                status != STATUS_CODE_ON_TIME && status != STATUS_CODE_UNKNOWN
+            ) {
+                for (uint256 j = 0; j < _flightInsurees[key].length; j++)
+                    _flightInsurees[key][j].paidAmmount =
+                        _flightInsurees[key][j].paidAmmount *
+                        SafeMath.div(3, 2);
+            }
+        }
+    }
+
+    /**
+     * @dev Initial funding for the insurance. Unless there are too many delayed flights
+     *      resulting in insurance payouts, the contract should be self-sustaining
+     *
+     */
+    function fund() public payable requireContractOwner {
+        require(
+            _insuranceOwners[msg.sender].exist,
+            "The insurance doesn't exist"
+        );
+
+        uint256 paidAmmount = _insuranceOwners[msg.sender].paidAmmount;
+        require(paidAmmount <= _balance, "The contract balance is not enough.");
+
+        delete _insuranceOwners[msg.sender];
+        msg.sender.transfer(paidAmmount);
+    }
+
+    /**
+     * @dev Adds balance to the contract by the contract owner.
+     */
+    function addBalance() external payable requireContractOwner {
+        require(msg.value > 0, "The balance can't be 0");
+        _balance = _balance.add(msg.value);
+    }
+
+    /**
+     * @dev Withdraws balance from the contract by the contract owner.
+     */
+    function withdrawBalance(uint32 withdrawAmmount)
+        external
+        requireContractOwner
+    {
+        require(
+            withdrawAmmount >= _balance,
+            "Balance doesn't cover the required ammount"
+        );
+        _balance = _balance.sub(withdrawAmmount);
+        _contractOwner.transfer(withdrawAmmount);
+    }
+
+    /**
+     * @dev Fallback function for funding smart contract.
+     *
+     */
+    function() external payable {
+        fund();
+    }
 
     /**
      * @dev Called after oracle has updated flight status
@@ -230,7 +371,11 @@ contract FlightSuretyApp {
         string memory flight,
         uint256 timestamp,
         uint8 statusCode
-    ) internal pure {}
+    ) internal {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        require(_flights[key].isRegistered, "Flight is not found");
+        _flights[key].statusCode = statusCode;
+    }
 
     // Generate a request for oracles to fetch flight information
     function fetchFlightStatus(
