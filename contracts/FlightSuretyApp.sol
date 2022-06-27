@@ -34,6 +34,7 @@ contract FlightSuretyApp {
         uint256 updatedTimestamp;
         address airline;
         string flight;
+        bool credited;
     }
 
     struct RegisterationApproval {
@@ -47,16 +48,22 @@ contract FlightSuretyApp {
         bool exist;
     }
 
+    struct FlightInsuranceFinder {
+        bytes32 flightKey;
+        uint256 flightIndex;
+        bool exist;
+    }
+
     address private _contractOwner; // Account used to deploy contract
 
     bytes32[] private _flightKeys; // Holds all flight keys and used for looping through all the flights.
     mapping(bytes32 => Flight) private _flights; // Holds all the registred flights created by the airline.
     mapping(bytes32 => Insurance[]) private _flightInsurees; // Holds the data of those who bought insurance that belongs to a certain flight key.
-    mapping(address => Insurance) _insuranceOwners; // Holds all the insurances bought with owners as keys.
+    mapping(address => FlightInsuranceFinder) _ownerInsuranceFinder; // Holds the finders which enables finding the Insurance instance without looping.
 
     mapping(address => RegisterationApproval) private _pendingApprovals; // Holding all the airlines in the approval process.
     IFlightSuretyData private _dataContract; // The data contract.
-    uint256 private _balance = 0; // Holds the current balance of the contract.
+    uint256 private _balance = 0 ether; // Holds the current balance of the contract.
 
     /********************************************************************************************/
     /*                                       Events                                             */
@@ -199,7 +206,6 @@ contract FlightSuretyApp {
         _pendingApprovals[msg.sender].paidFees = true;
 
         // Adding funds to the contract.
-        // _contractOwner.transfer(msg.value);
         _balance = _balance.add(msg.value);
 
         // Checking if the approvals state is complete and the airline is ready to be registred or not.
@@ -251,10 +257,20 @@ contract FlightSuretyApp {
             airline: msg.sender,
             flight: flight,
             statusCode: STATUS_CODE_UNKNOWN,
-            updatedTimestamp: timestamp
+            updatedTimestamp: timestamp,
+            credited: false
         });
 
         _flightKeys.push(key);
+    }
+
+    function isFlight(
+        address airline,
+        string flight,
+        uint256 timestamp
+    ) external view requireContractOwner returns (bool) {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        return _flights[key].isRegistered;
     }
 
     /**
@@ -283,17 +299,47 @@ contract FlightSuretyApp {
             exist: true
         });
 
+        // Adding the value of the msg to the balance.
+        _balance = _balance.add(msg.value);
+
         // Adding the insurance instance to the proper lists.
         _flightInsurees[key].push(boughtInsurance);
-        _insuranceOwners[msg.sender] = boughtInsurance;
+
+        // Adding the insurance finder to be able to retrieve insurace without looping.
+        FlightInsuranceFinder memory finder = FlightInsuranceFinder({
+            flightKey: key,
+            flightIndex: _flightInsurees[key].length - 1,
+            exist: true
+        });
+
+        _ownerInsuranceFinder[msg.sender] = finder;
+    }
+
+    function getInsurancePayment(address customer)
+        external
+        view
+        requireContractOwner
+        returns (uint256)
+    {
+        require(
+            _ownerInsuranceFinder[customer].exist,
+            "The customer didn't buy any insurance"
+        );
+        bytes32 flightKey = _ownerInsuranceFinder[customer].flightKey;
+        uint256 flightIndex = _ownerInsuranceFinder[customer].flightIndex;
+        uint256 paidAmmount = _flightInsurees[flightKey][flightIndex]
+            .paidAmmount;
+
+        return paidAmmount;
     }
 
     /**
      *  @dev Credits payouts to insurees
      */
-    function creditInsurees() external {
+    function creditInsurees() external requireContractOwner {
         uint8 status;
         bytes32 key;
+        // uint256 factor = SafeMath.div(3, 2);
 
         // Looping all over the flight keys. And checking the flight status.
         // If the flight was delayed, increase the paid ammount of all who
@@ -303,12 +349,16 @@ contract FlightSuretyApp {
             status = _flights[key].statusCode;
             // Checking the flight status.
             if (
-                status != STATUS_CODE_ON_TIME && status != STATUS_CODE_UNKNOWN
+                status != STATUS_CODE_ON_TIME &&
+                status != STATUS_CODE_UNKNOWN &&
+                !_flights[key].credited
             ) {
-                for (uint256 j = 0; j < _flightInsurees[key].length; j++)
-                    _flightInsurees[key][j].paidAmmount =
-                        _flightInsurees[key][j].paidAmmount *
-                        SafeMath.div(3, 2);
+                _flights[key].credited = true;
+                for (uint256 j = 0; j < _flightInsurees[key].length; j++) {
+                    uint256 ammount = _flightInsurees[key][j].paidAmmount;
+                    ammount = ammount.mul(3).div(2);
+                    _flightInsurees[key][j].paidAmmount = ammount;
+                }
             }
         }
     }
@@ -320,15 +370,22 @@ contract FlightSuretyApp {
      */
     function fund() public payable requireContractOwner {
         require(
-            _insuranceOwners[msg.sender].exist,
+            _ownerInsuranceFinder[msg.sender].exist,
             "The insurance doesn't exist"
         );
 
-        uint256 paidAmmount = _insuranceOwners[msg.sender].paidAmmount;
-        require(paidAmmount <= _balance, "The contract balance is not enough.");
+        bytes32 flightKey = _ownerInsuranceFinder[msg.sender].flightKey;
+        uint256 flightIndex = _ownerInsuranceFinder[msg.sender].flightIndex;
+        uint256 creditAmmount = _flightInsurees[flightKey][flightIndex]
+            .paidAmmount;
 
-        delete _insuranceOwners[msg.sender];
-        msg.sender.transfer(paidAmmount);
+        require(
+            creditAmmount <= _balance,
+            "The contract balance is not enough."
+        );
+
+        delete _ownerInsuranceFinder[msg.sender];
+        msg.sender.transfer(creditAmmount);
     }
 
     /**
@@ -355,6 +412,18 @@ contract FlightSuretyApp {
     }
 
     /**
+     * @dev Gets the current value of the balance held by the contract.
+     */
+    function getCurrentBalance()
+        external
+        view
+        requireContractOwner
+        returns (uint256)
+    {
+        return _balance;
+    }
+
+    /**
      * @dev Fallback function for funding smart contract.
      *
      */
@@ -368,13 +437,23 @@ contract FlightSuretyApp {
      */
     function processFlightStatus(
         address airline,
-        string memory flight,
+        string flight,
         uint256 timestamp,
         uint8 statusCode
-    ) internal {
+    ) public {
         bytes32 key = getFlightKey(airline, flight, timestamp);
         require(_flights[key].isRegistered, "Flight is not found");
         _flights[key].statusCode = statusCode;
+    }
+
+    function getFlightStatus(
+        address airline,
+        string flight,
+        uint256 timestamp
+    ) external view requireContractOwner returns (uint8) {
+        bytes32 key = getFlightKey(airline, flight, timestamp);
+        require(_flights[key].isRegistered, "Flight is not found");
+        return _flights[key].statusCode;
     }
 
     // Generate a request for oracles to fetch flight information
