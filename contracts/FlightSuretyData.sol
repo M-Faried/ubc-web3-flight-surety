@@ -12,8 +12,8 @@ contract FlightSuretyData {
         bool registred;
     }
 
-    address private _contractOwner; // Account used to deploy contract
-    bool private _operational = true; // Blocks all state changes throughout the contract if false
+    address private _contractOwner; // Account used to deploy contract.
+    bool private _operational = true; // Blocks all state changes throughout the contract if false.
     mapping(address => Airline) private _airlines; // Holding the registred successfully mapping.
     uint256 private _airlinesLength = 0; // Holds the length of pending approvals mapping.
     mapping(address => bool) _authorizedContracts; // Holds all autorized contracts to access restricted functions and data.
@@ -138,43 +138,43 @@ contract FlightSuretyData {
         return _airlinesLength;
     }
 
-    /**
-     * @dev Buy insurance for a flight
-     *
-     */
-    function buy() external payable {}
+    // /**
+    //  * @dev Buy insurance for a flight
+    //  *
+    //  */
+    // function buy() external payable {}
 
-    /**
-     *  @dev Credits payouts to insurees
-     */
-    function creditInsurees() external pure {}
+    // /**
+    //  *  @dev Credits payouts to insurees
+    //  */
+    // function creditInsurees() external pure {}
 
-    /**
-     *  @dev Transfers eligible payout funds to insuree
-     *
-     */
-    function pay() external pure {}
+    // /**
+    //  *  @dev Transfers eligible payout funds to insuree
+    //  *
+    //  */
+    // function pay() external pure {}
 
-    /**
-     * @dev Initial funding for the insurance. Unless there are too many delayed flights
-     *      resulting in insurance payouts, the contract should be self-sustaining
-     *
-     */
-    function fund() public payable {}
+    // /**
+    //  * @dev Initial funding for the insurance. Unless there are too many delayed flights
+    //  *      resulting in insurance payouts, the contract should be self-sustaining
+    //  *
+    //  */
+    // function fund() public payable {}
 
-    function getFlightKey(
-        address airline,
-        string memory flight,
-        uint256 timestamp
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(airline, flight, timestamp));
-    }
+    // function getFlightKey(
+    //     address airline,
+    //     string memory flight,
+    //     uint256 timestamp
+    // ) internal pure returns (bytes32) {
+    //     return keccak256(abi.encodePacked(airline, flight, timestamp));
+    // }
 
-    /**
-     * @dev Fallback function for funding smart contract.
-     *
-     */
-    function() external payable {
-        fund();
-    }
+    // /**
+    //  * @dev Fallback function for funding smart contract.
+    //  *
+    //  */
+    // function() external payable {
+    //     fund();
+    // }
 }
