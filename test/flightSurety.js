@@ -2,8 +2,21 @@
 var Test = require('../config/testConfig.js');
 var BigNumber = require('bignumber.js');
 var web3 = require('web3');
+const { IgnorePlugin } = require('webpack');
 
 contract('Flight Surety Tests', async (accounts) => {
+
+    const flight = {
+        id: 'ND1309', // Course number
+        timestamp: Math.floor(Date.now() / 1000), // Timestamp.        
+    }
+
+    const STATUS_CODE_UNKNOWN = 0;
+    const STATUS_CODE_ON_TIME = 10;
+    const STATUS_CODE_LATE_AIRLINE = 20;
+    const STATUS_CODE_LATE_WEATHER = 30;
+    const STATUS_CODE_LATE_TECHNICAL = 40;
+    const STATUS_CODE_LATE_OTHER = 50;
 
     var config;
 
@@ -106,6 +119,8 @@ contract('Flight Surety Tests', async (accounts) => {
     it("(airline) does NOT register if it pays insuffecient funds", async () => {
 
         let fees = web3.utils.toWei("0.5", "ether");
+        let balanceBefore = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
+
         let newAirline = config.testAddresses[2];
 
         try {
@@ -115,7 +130,9 @@ contract('Flight Surety Tests', async (accounts) => {
 
         }
         let registred = await config.flightSuretyData.isAirline(newAirline);
+        let balanceAfter = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
         assert.equal(registred, false, "Airline shouldn't be registred without paying the full fees");
+        assert.equal(`${balanceBefore}`, `${balanceAfter}`, "The balance should remain the same");
     });
 
 
@@ -123,6 +140,7 @@ contract('Flight Surety Tests', async (accounts) => {
 
         let fees = web3.utils.toWei("10", "ether");
         let newAirline = config.testAddresses[2];
+        let balanceBefore = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
 
         try {
             await config.flightSuretyApp.payRegistrationFee({ from: newAirline, value: fees });
@@ -132,16 +150,27 @@ contract('Flight Surety Tests', async (accounts) => {
         }
 
         let registred = await config.flightSuretyData.isAirline(newAirline);
+
+        // Checking the balance after the operation.
+        let balanceAfter = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
+        balanceAfter = web3.utils.fromWei(`${balanceAfter}`, "ether");
+        let expectedBalance = web3.utils.fromWei(`${balanceBefore + fees}`, "ether");
+
         assert.equal(registred, true, "Airline should be registred after paying the full fees, and being approved by another existing airline.");
+        assert.equal(`${balanceAfter}`, `${expectedBalance}`, "The balance should be updated.");
+
     });
 
-    it("(airline) airlines can NOT pay the fees twice.", async () => {
+    it("(airline) airlines can NOT pay the fees twice", async () => {
 
         let fees = web3.utils.toWei("10", "ether");
         let newAirline = config.testAddresses[9];
 
+        // Paying the fees for the airline.
         await config.flightSuretyApp.payRegistrationFee({ from: newAirline, value: fees });
 
+        // Trying to pay the fees again.
+        let balanceBefore = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
         let paymentDenied = false;
         try {
             await config.flightSuretyApp.payRegistrationFee({ from: newAirline, value: fees });
@@ -149,7 +178,11 @@ contract('Flight Surety Tests', async (accounts) => {
         catch (e) {
             paymentDenied = true
         }
+
+        // Checking the balance after the operation.
+        let balanceAfter = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
         assert.equal(paymentDenied, true, "Airline should not be able to pay the fees twice.");
+        assert.equal(`${balanceBefore}`, `${balanceAfter}`, "The balance should remain the same when the payment is rejected");
     });
 
     it('(access control) ensures that authorized contracts can access the number of registred airlines', async () => {
@@ -192,7 +225,7 @@ contract('Flight Surety Tests', async (accounts) => {
     });
 
 
-    it("(multiparty) ensures multiparty consensys is working correctly.", async () => {
+    it("(multiparty) ensures multiparty consensys is working correctly", async () => {
 
         // As fee is paid and we already have a confirmation from the first airline, all we missing for registration 
         // is another registration request to complete registration.
@@ -208,7 +241,7 @@ contract('Flight Surety Tests', async (accounts) => {
 
     });
 
-    it("(multiparty) ensures multiparty consensys is working correctly.", async () => {
+    it("(multiparty) ensures multiparty consensys is working correctly", async () => {
 
         let fees = web3.utils.toWei("10", "ether");
         let newAddress = config.testAddresses[6];
@@ -224,7 +257,7 @@ contract('Flight Surety Tests', async (accounts) => {
         assert.equal(addedLastAirline, true, "The last airline shouldn't be added before consensys happen");
     });
 
-    it("(multiparty) ensures multiparty consensys is working correctly and requires half of the number of approvals.", async () => {
+    it("(multiparty) ensures multiparty consensys is working correctly and requires half of the number of approvals", async () => {
 
         let fees = web3.utils.toWei("10", "ether");
         let newAddress = config.testAddresses[7];
@@ -240,5 +273,123 @@ contract('Flight Surety Tests', async (accounts) => {
         assert.equal(airlinesCount.toNumber(), 7, "The airlines count is not correct.");
         assert.equal(addedLastAirline, true, "The last airline shouldn't be added before consensys happen");
     });
+
+    it("(flight) flight can be registred successfully by a registred airline", async () => {
+        await config.flightSuretyApp.registerFlight(flight.id, flight.timestamp, { from: config.firstAirline });
+        let registered = await config.flightSuretyApp.isFlight(config.firstAirline, flight.id, flight.timestamp, { from: config.owner });
+        assert.equal(registered, true, "The flight was not registered successfully");
+    });
+
+    it("(flight) flight can NOT be registred by a non registred airline", async () => {
+        let declined = false;
+        try {
+            await config.flightSuretyApp.registerFlight(flight.id, flight.timestamp, { from: config.testAddresses[15] });
+        }
+        catch (e) {
+            declined = true;
+        }
+        let registered = await config.flightSuretyApp.isFlight(config.testAddresses[15], flight.id, flight.timestamp, { from: config.owner });
+        assert.equal(declined, true, "Flight registration by a non registred airline is allowed");
+        assert.equal(registered, false, "The is registred while it shouldn't");
+    });
+
+    it("(flight) doesn't allow users to buy insurance for nonexistant flights", async () => {
+        let fees = web3.utils.toWei("1", "ether");
+        let customer = config.testAddresses[20];
+        let unregistredFlight = config.testAddresses[11];
+        let declined = false;
+        try {
+            await config.flightSuretyApp.buy(unregistredFlight, flight.id, fligh.timestamp, { from: customer, value: fees });
+        }
+        catch (e) {
+            declined = true;
+        }
+        assert.equal(declined, true, "A customer was able to purchase insurance for non existing flight");
+    });
+
+    it("(flight) doesn't allow users to buy insurance for less than 1 ether", async () => {
+        let fees = web3.utils.toWei("1.5", "ether");
+        let customer = config.testAddresses[20];
+        let declined = false;
+        try {
+            await config.flightSuretyApp.buy(config.firstAirline, flight.id, fligh.timestamp, { from: customer, value: fees });
+        }
+        catch (e) {
+            declined = true;
+        }
+        assert.equal(declined, true, "A customer was able to purchase insurance for less than one ether");
+    });
+
+    it("(flight) allows customer to buy insurance for a flight", async () => {
+        let insurancePayment = web3.utils.toWei("0.5", "ether");
+        let customer = config.testAddresses[20];
+
+        let balanceBefore = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
+        await config.flightSuretyApp.buy(config.firstAirline, flight.id, flight.timestamp, { from: customer, value: insurancePayment });
+
+        let payment = await config.flightSuretyApp.getInsurancePayment(customer, { from: config.owner });
+        let balanceAfter = await config.flightSuretyApp.getCurrentBalance({ from: config.owner });
+        let expected = web3.utils.fromWei(`${balanceAfter - balanceBefore}`, "ether")
+
+        assert.equal(payment, insurancePayment, "The customer wasn't able to purchace ");
+        assert.equal(expected, web3.utils.fromWei(`${insurancePayment}`, "ether"), "The balance is not updates");
+    });
+
+    it("(flight oracle) Fetching flight status oracle request event is triggered", async () => {
+        let eventTriggered = false;
+        config.flightSuretyApp.OracleRequest(null, () => {
+            eventTriggered = true;
+        });
+        await config.flightSuretyApp.fetchFlightStatus(config.firstAirline, flight.id, flight.timestamp);
+        assert.equal(eventTriggered, true, "The event was not triggered");
+    });
+
+    it("(flight oracle) can update the flight status correctly", async () => {
+        let writeStatus = STATUS_CODE_LATE_WEATHER;
+        await config.flightSuretyApp.processFlightStatus(config.firstAirline, flight.id, flight.timestamp, writeStatus);
+        let readStatus = await config.flightSuretyApp.getFlightStatus(config.firstAirline, flight.id, flight.timestamp, { from: config.owner });
+        assert.equal(writeStatus, readStatus, "Flight status is not set correctly");
+    });
+
+    it("(flight oracle) can credit the balance of the insuree correctly", async () => {
+        // These values are the values of a customer from a previous test.
+        let customer = config.testAddresses[20];
+        let customerPayment = web3.utils.toWei("0.5", "ether");
+        let expectedPayment = customerPayment * 1.5;
+
+        // calling credit insurees.
+        await config.flightSuretyApp.creditInsurees({ from: config.owner });
+        let payment = await config.flightSuretyApp.getInsurancePayment(customer, { from: config.owner });
+
+        // Checking the value as expected.
+        assert.equal(`${payment}`, `${expectedPayment}`, "The credit value of the insuree wasn't increased correctly");
+    });
+
+    it("(flight) does NOT increase the credit value for ON_TIME flights insurees", async () => {
+        let insurancePayment = web3.utils.toWei("0.7", "ether");
+        let customer = config.testAddresses[21];
+
+        let airline = config.testAddresses[7];
+        let timestamp = Math.floor(Date.now() / 1000); // Timestamp.
+        let flightId = "ND0002";
+
+        // Registering the flight.
+        await config.flightSuretyApp.registerFlight(flightId, timestamp, { from: airline });
+        // Buying insurance by the customer.
+        await config.flightSuretyApp.buy(airline, flightId, timestamp, { from: customer, value: insurancePayment });
+        // Updating the flight status.
+        await config.flightSuretyApp.processFlightStatus(airline, flightId, timestamp, STATUS_CODE_ON_TIME);
+        // Updating insurees balance.
+        await config.flightSuretyApp.creditInsurees({ from: config.owner });
+        // Checking the balance of the customer.
+        let payment = await config.flightSuretyApp.getInsurancePayment(customer, { from: config.owner });
+        assert.equal(`${payment}`, `${insurancePayment}`, "The credit value of the insuree has increased while it shouldn't");
+    });
+
+
+
+
+
+
 
 });
