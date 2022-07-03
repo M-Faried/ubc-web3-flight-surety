@@ -371,7 +371,7 @@ contract FlightSuretyApp {
     function fund() public payable requireContractOwner {
         require(
             _ownerInsuranceFinder[msg.sender].exist,
-            "The insurance doesn't exist"
+            "The insurance doesn't exist or has been already funded"
         );
 
         bytes32 flightKey = _ownerInsuranceFinder[msg.sender].flightKey;
