@@ -59,7 +59,7 @@ contract FlightSuretyApp {
     bytes32[] private _flightKeys; // Holds all flight keys and used for looping through all the flights.
     mapping(bytes32 => Flight) private _flights; // Holds all the registred flights created by the airline.
     mapping(bytes32 => Insurance[]) private _flightInsurees; // Holds the data of those who bought insurance that belongs to a certain flight key.
-    mapping(address => FlightInsuranceFinder) _ownerInsuranceFinder; // Holds the finders which enables finding the Insurance instance without looping.
+    mapping(address => FlightInsuranceFinder) _ownerInsuranceFinder; // Holds the finders which links the owner to the insurance instance in flight insureers.
 
     mapping(address => RegisterationApproval) private _pendingApprovals; // Holding all the airlines in the approval process.
     IFlightSuretyData private _dataContract; // The data contract.
