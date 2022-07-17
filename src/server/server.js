@@ -48,7 +48,7 @@ _flightSuretyApp.events.OracleRequest({
     const random = new Random();
     let statusCode = Math.ceil((random.integer(1, 50)) / 10) * 10; // Generating random status
 
-    // console.log(`Got a new event with randome index: ${eventValue.index} for flight: ${eventValue.flight} and timestamp ${eventValue.timestamp}`);
+    // console.log(`Oracle Received Request: ID ${requestFlight.flight} Airline ${requestFlight.airline} sent status ${statusCode}`);    
 
     _flightSuretyApp.submitOracleResponse(
       _oracle.index,
