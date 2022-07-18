@@ -7,25 +7,61 @@
     <title>FlightSurety</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.1/css/bootstrap.min.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <script src="./index.js"></script>
 </head>
 
 <body>
 
     <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
         <a class="navbar-brand" href="#">FlightSurety</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault"
-            aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault"
+            aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
     </nav>
 
     <main class="container">
 
-        <div id="display-wrapper" class="top-20">
+        <div id="display-wrapper" class="my-5">
+            <h1>Flight Surety App</h1>
         </div>
-        <div class="row top-20">
-            <label class="form">Flight</label> <input type="text" id="flight-number"> <btn class="btn btn-primary" id="submit-oracle">Submit to Oracles</btn>
+
+        <div class="my-5">
+            <h3>Current User:</h3>
+            <h3 id="user-id"></h3>
         </div>
+
+        <!--
+            We need to be able to do the following.
+            * Add airline as an owner.
+            * The airline can add a flight.
+            * The customer can purchase an airline.    
+        -->
+
+        <!-- Displays all the available flight numbers and lets the user select from them -->
+        <div class="row my-5">
+            <label class="form mx-4">Flight</label>
+            <input type="text" id="flight-number">
+            <btn class="btn btn-primary mx-4" id="submit-oracle">Submit to Oracles</btn>
+        </div>
+
+        <!-- Lets the user enter the ammount of insurance with maximum up to 1 ether -->
+        <div class="row my-5">
+            <label class="form mx-4">Flight</label>
+            <input type="text" id="flight-number">
+            <btn class="btn btn-primary mx-4" id="submit-oracle">Submit to Oracles</btn>
+        </div>
+
+        <!-- A button is needed here to confirm the purchase -->
+
+        <!-- Another button here to refund the account when the flight is delayed -->
+
+        <div class="row my-5">
+            <label class="form mx-4">Flight</label>
+            <input type="text" id="flight-number">
+            <btn class="btn btn-primary mx-4" id="submit-oracle">Submit to Oracles</btn>
+        </div>
+
     </main>
 
 </body>

@@ -5,15 +5,11 @@ body {
 }
 
 .container {
-    margin-top: 400px;
+    margin-top: 600px;
     background-color: #000;
     opacity: 0.9;
     color: #fff;
     padding: 40px;
-}
-
-.top-20 {
-    margin-top: 20px;
 }
 
 h5 {
