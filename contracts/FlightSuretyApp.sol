@@ -368,7 +368,7 @@ contract FlightSuretyApp {
      *      resulting in insurance payouts, the contract should be self-sustaining
      *
      */
-    function fund() public payable requireContractOwner {
+    function fund() public payable {
         require(
             _ownerInsuranceFinder[msg.sender].exist,
             "The insurance doesn't exist or has been already funded"
@@ -385,6 +385,7 @@ contract FlightSuretyApp {
         );
 
         delete _ownerInsuranceFinder[msg.sender];
+        _balance = _balance.sub(creditAmmount);
         msg.sender.transfer(creditAmmount);
     }
 
