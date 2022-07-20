@@ -38,28 +38,54 @@
             * The customer can purchase an airline.    
         -->
 
-        <!-- Displays all the available flight numbers and lets the user select from them -->
+        <h1>Airline Management Section</h1>
+
+        <!-- Add airline controls -->
         <div class="row my-5">
-            <label class="form mx-4">Flight</label>
-            <input type="text" id="flight-number">
-            <btn class="btn btn-primary mx-4" id="submit-oracle">Submit to Oracles</btn>
+            <label class="form mx-4">Airline</label>
+            <input type="text" id="txt-register-airline" placeholder="Enter Airline ID...">
+            <btn class="btn btn-primary mx-4" id="btn-register-airline">Add Airline</btn>
         </div>
 
-        <!-- Lets the user enter the ammount of insurance with maximum up to 1 ether -->
         <div class="row my-5">
-            <label class="form mx-4">Flight</label>
-            <input type="text" id="flight-number">
-            <btn class="btn btn-primary mx-4" id="submit-oracle">Submit to Oracles</btn>
+            <label class="form mx-4">Fees</label>
+            <input type="text" id="txt-pay-registration-fees" placeholder="Enter Airline ID...">
+            <btn class="btn btn-primary mx-4" id="btn-pay-registration-fees">Pay</btn>
         </div>
 
-        <!-- A button is needed here to confirm the purchase -->
-
-        <!-- Another button here to refund the account when the flight is delayed -->
-
+        <!-- Add Flight Section -->
         <div class="row my-5">
-            <label class="form mx-4">Flight</label>
-            <input type="text" id="flight-number">
-            <btn class="btn btn-primary mx-4" id="submit-oracle">Submit to Oracles</btn>
+            <label class="form mx-4">Add Flight</label>
+            <input type="text" id="txt-add-flight" placeholder="Enter Flight Number...">
+            <btn class="btn btn-primary mx-4" id="btn-add-flight">Add Flight</btn>
+        </div>
+
+
+
+        <div class="row my-5 flex-column">
+            <h1>Purchase Flight Insurance Section</h1>
+            <input class="my-2" type="text" id="txt-purchase-airline" placeholder="Enter Airline...">
+            <input class="my-2" type="text" id="txt-purchase-flight" placeholder="Enter Flight Number...">
+            <input class="my-2" type="text" id="txt-purchase-timestamp" placeholder="Enter Timestamp...">
+            <btn class="btn btn-primary mx-4 my-2" id="btn-purchase-flight">Purchase</btn>
+        </div>
+
+        <div class="row my-5 flex-column">
+            <h1>Check Flight Status</h1>
+            <input class="my-2" type="text" id="txt-status-airline" placeholder="Enter Airline...">
+            <input class="my-2" type="text" id="txt-status-flight" placeholder="Enter Flight Number...">
+            <input class="my-2" type="text" id="txt-status-timestamp" placeholder="Enter Timestamp...">
+            <btn class="btn btn-primary mx-4 my-2" id="btn-status-flight">Check Status</btn>
+        </div>
+
+        <div class="row my-5 flex-column">
+            <h1>Credit Insurees</h1>
+            <btn class="btn btn-primary mx-4 my-2" id="btn-credit-insurees">Credit Insurees</btn>
+        </div>
+
+        <div class="row my-5 flex-column">
+            <h1>Withdraw Insurance Money</h1>
+            <btn class="btn btn-primary mx-4" id="btn-fund-insurance">Fund Insurance</btn>
         </div>
 
     </main>

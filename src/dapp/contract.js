@@ -9,48 +9,94 @@ export default class Contract {
         this.web3 = new Web3(new Web3.providers.HttpProvider(config.url));
         this.flightSuretyApp = new this.web3.eth.Contract(FlightSuretyApp.abi, config.appAddress);
         this.initialize(callback);
-        this.owner = null;
+        this.currentAccount = null;
         this.airlines = [];
         this.passengers = [];
     }
 
     initialize(callback) {
         this.web3.eth.getAccounts((error, accts) => {
-           
-            this.owner = accts[0];
 
-            let counter = 1;
-            
-            while(this.airlines.length < 5) {
-                this.airlines.push(accts[counter++]);
-            }
+            this.currentAccount = accts[0];
+            console.log('Here are all the accounts:', accts);
 
-            while(this.passengers.length < 5) {
-                this.passengers.push(accts[counter++]);
-            }
+            // let counter = 1;
+
+            // while (this.airlines.length < 5) {
+            //     this.airlines.push(accts[counter++]);
+            // }
+
+            // while (this.passengers.length < 5) {
+            //     this.passengers.push(accts[counter++]);
+            // }
 
             callback();
         });
     }
 
     isOperational(callback) {
-       let self = this;
-       self.flightSuretyApp.methods
+        let self = this;
+        self.flightSuretyApp.methods
             .isOperational()
-            .call({ from: self.owner}, callback);
+            .call({ from: self.currentAccount }, callback);
     }
 
-    fetchFlightStatus(flight, callback) {
+    fetchFlightStatus(airline, flight, timestamp, callback) {
         let self = this;
-        let payload = {
-            airline: self.airlines[0],
-            flight: flight,
-            timestamp: Math.floor(Date.now() / 1000)
-        } 
         self.flightSuretyApp.methods
-            .fetchFlightStatus(payload.airline, payload.flight, payload.timestamp)
-            .send({ from: self.owner}, (error, result) => {
-                callback(error, payload);
+            .fetchFlightStatus(airline, flight, timestamp)
+            .send({ from: self.currentAccount }, (error, result) => {
+                callback(error);
             });
     }
+
+    registerAirline(airline) {
+        let self = this;
+        self.flightSuretyApp.registerAirline(airline)
+            .send({ from: airline }, (error, result) => {
+                self.airlines.push(airline);
+                callback(error, result);
+            })
+    }
+
+    payRegistrationFee(airline, fees) {
+        let self = this;
+        self.flightSuretyApp.payRegistrationFee()
+            .send({ from: airline, value: this.web3.utils.fromWei(fees, "ether") }, (error, result) => {
+                callback(error, result);
+            })
+    }
+
+    registerFlight(airline, flightId, timestamp) {
+        let self = this;
+        self.flightSuretyApp.registerFlight(flightId, timestamp)
+            .send({ from: airline }, (error, result) => {
+                callback(error, result);
+            })
+    }
+
+    buy(airline, flightId, timeStamp, passenger, insuranceAmmount) {
+        let self = this;
+        self.flightSuretyApp.buy(airline, flightId, timeStamp)
+            .send({ from: passenger, value: insuranceAmmount }, (error, result) => {
+                callback(error, result);
+            })
+    }
+
+    creditInsurees() {
+        let self = this;
+        self.flightSuretyApp.creditInsurees()
+            .send({ from: self.currentAccount }, (error, result) => {
+                callback(error, result);
+            })
+    }
+
+    fund() {
+        let self = this;
+        self.flightSuretyApp.fund()
+            .send({ from: self.currentAccount }, (error, result) => {
+                callback(error, result);
+            })
+    }
+
 }
