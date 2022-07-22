@@ -1,8 +1,6 @@
 
 var Test = require('../config/testConfig.js');
-var BigNumber = require('bignumber.js');
 var web3 = require('web3');
-const { IgnorePlugin } = require('webpack');
 
 contract('Flight Surety Tests', async (accounts) => {
 
